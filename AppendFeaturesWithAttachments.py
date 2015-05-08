@@ -65,8 +65,7 @@ def appendFeatures(features,targetFc):
             tempField = f.name
             break
     with arcpy.da.SearchCursor(features,'*') as fscur:
-        arow = fscur.next()
-        if arow != None:
+        for arow in fscur:
             editor= arcpy.da.Editor(desc.path)
             editor.startEditing(False, False)
             with arcpy.da.InsertCursor(targetFc,tempField) as icur:
