@@ -10,6 +10,7 @@
 
 #-------------------------------------------------------------------------------
 import os, arcpy
+arcpy.env.overwriteOutput = True
 
 def buildWhereClauseFromList(OriginTable, PrimaryKeyField, valueList):
     """Takes a list of values and constructs a SQL WHERE
@@ -63,83 +64,76 @@ def appendFeatures(features,targetFc):
     #List of fields from target feature class
     tfieldNames = fieldNameList(targetFc)
     #Find Guid field index for later use
-    guidField = afieldNames.index('GlobalID') if 'GlobalID' in afieldNames else None
+    oldGuidField = afieldNames.index('GlobalID') if 'GlobalID' in afieldNames else None
     tempField = None
-    tempID = None
-    newGuid = None
+    guids = {}
     tfields = arcpy.ListFields(targetFc)
     #find a field we can use temporarily to hold a unique ID
     for f in tfields:
-        if f.type == 'String' and f.length> 32 and f.domain == '':
+        if f.type == 'String' and f.length> 5 and f.domain == '':
             tempField = f.name
             break
     editor= arcpy.da.Editor(desc.path)
     with arcpy.da.SearchCursor(features,'*') as fscur:
 
-        for arow in fscur:
-            editor.startEditing(False, False)
+        editor.startEditing(False, False)
 
-            #Insert new row and write temp ID to the field.
-            #The new row will have a new GUID assigned to it
-            with arcpy.da.InsertCursor(targetFc,tempField) as icur:
-                #Generate random ID
-                tempID = str(uuid.uuid4())[:16]
-                icur.insertRow([tempID])
+        #Insert new row and write temp ID to the field.
+        #The new row will have a new GUID assigned to it
+        with arcpy.da.InsertCursor(targetFc,tempField) as icur:
+            for arow in fscur:
 
-            #Format expression to query new row
-            fieldDelimited = arcpy.AddFieldDelimiters(desc.path, tempField)
-            expression = "{} = '{}'".format(fieldDelimited,tempID)
+                newRow = icur.insertRow(["TEMP"])
 
-            #Query new row and get new GUID
-            with arcpy.da.SearchCursor(targetFc,'GlobalID',expression) as scur:
-                for srow in scur:
-                    #Get new GUID
-                    newGuid = scur[0]
+                #Format expression to query new row
+                fieldDelimited = arcpy.AddFieldDelimiters(desc.path, "OBJECTID")
+                expression = "{} = {}".format(fieldDelimited,newRow)
 
-            #Update new empty row with all the information from update feature
-            with arcpy.da.UpdateCursor(targetFc,'*', expression)as ucur:
-                urow = ucur.next()
-                for f in tfields:
-                    fname = f.name
-                    if fname != 'OBJECTID' and fname != 'GlobalID' and fname in afieldNames:
-                         urow[tfieldNames.index(fname)] = arow[afieldNames.index(fname)]
-                ucur.updateRow(urow)
+                #Query new row and get new GUID
+                with arcpy.da.SearchCursor(targetFc,'GlobalID',expression) as scur:
+                    for srow in scur:
+                        print "Old GUID = {} New GUID = {}".format(arow[oldGuidField], scur[0])
+                        guids[arow[oldGuidField]] = scur[0]
 
-            editor.stopEditing(True)
+                #Update  empty row with all the information from update feature
+                with arcpy.da.UpdateCursor(targetFc,'*', expression)as ucur:
+                    urow = ucur.next()
+                    for f in tfields:
+                        fname = f.name
+                        if fname != 'OBJECTID' and fname != 'GlobalID' and fname in afieldNames:
+                            urow[tfieldNames.index(fname)] = arow[afieldNames.index(fname)]
+                    ucur.updateRow(urow)
 
-            appendAttachments(features,arow[guidField],targetFc,newGuid)
+        editor.stopEditing(True)
 
-def appendAttachments(fc,guid,tfc,newGuid):
+        appendAttachments(features,targetFc,guids)
+
+def appendAttachments(fc,tfc,guidDict):
+    fc = fc + '__ATTACH'
+    tfc = tfc + '__ATTACH'
+    expression = None
+    tfcLayer = "in_memory\\tfcLayer"
     desc = arcpy.Describe(fc)
-    #Format query
-    fieldDelimited = arcpy.AddFieldDelimiters(desc.path, 'GlobalID')
-    expression = "{} = '{}'".format(fieldDelimited,guid)
-    #Make feature layer of feature
-    flayer = arcpy.MakeFeatureLayer_management(fc, expression)
-    #Select related attachments
-    records = selectRelatedRecords(flayer,fc+'__ATTACH','GlobalID','REL_GLOBALID')
+    arcpy.Append_management(fc,tfc,"NO_TEST")
+
+    #Make query for attachment table, looking for newly written GUIDS
+    expression = buildWhereClauseFromList(tfc,"REL_GLOBALID",guidDict.keys())
+    arcpy.MakeTableView_management(tfc,tfcLayer,expression)
+    #editor
     editor = arcpy.da.Editor(desc.path)
     editor.startEditing(False, False)
     #Update attachments with new GUID for target features
-    with arcpy.da.UpdateCursor(records,'REL_GLOBALID') as ucur:
+    with arcpy.da.UpdateCursor(tfcLayer,'REL_GLOBALID') as ucur:
         for urow in ucur:
-            urow[0] = newGuid
+            urow[0] = guidDict[urow[0]]
             ucur.updateRow(urow)
     editor.stopEditing(True)
-
-    #Make query for attachment table, looking for newly written GUIDS
-    fieldDelimited = arcpy.AddFieldDelimiters(desc.path, 'REL_GLOBALID')
-    expression = "{} = '{}'".format(fieldDelimited,newGuid)
-    #Make table view of attachments
-    tView = arcpy.MakeTableView_management(fc+'__ATTACH',"AppendRows", expression)
-    #Append rows
-    arcpy.Append_management(tView,tfc+'__ATTACH','NO_TEST')
     return None
 
 
 def main():
-    updateFeatureClass = r'C:\Users\ben7682\AppData\Local\Temp\Update.gdb\SEMPRA_DBO_P_GasLeak'
-    targetFeatureClass = r'C:\Users\ben7682\AppData\Local\Temp\Target.gdb\SEMPRA_DBO_P_GasLeak'
+    updateFeatureClass = r'C:\Temp\TEST\Update.gdb\Orig'
+    targetFeatureClass = r'C:\Temp\TEST\Target.gdb\Orig'
 
     appendFeatures(updateFeatureClass, targetFeatureClass)
 
