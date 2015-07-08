@@ -32,19 +32,6 @@ def buildWhereClauseFromList(OriginTable, PrimaryKeyField, valueList):
 
     return whereClause
 
-def selectRelatedRecords(OriginTable, DestinationTable, PrimaryKeyField, ForiegnKeyField):
-    """Defines the record selection from the record selection of the OriginTable
-      and applys it to the DestinationTable using a SQL WHERE clause built
-      in the previous defintion"""
-
-    # Set the SearchCursor to look through the selection of the OriginTable
-    sourceIDs = set([row[0] for row in arcpy.da.SearchCursor(OriginTable, PrimaryKeyField)])
-
-    # Establishes the where clause used to select records from DestinationTable
-    whereClause = buildWhereClauseFromList(DestinationTable, ForiegnKeyField, sourceIDs)
-
-    # Process: Select Layer By Attribute
-    return arcpy.MakeTableView_management(DestinationTable, "NEW_SELECTION", whereClause)
 
 def fieldNameList(fc):
     """Convert FieldList object to list of fields"""
@@ -57,7 +44,6 @@ def fieldNameList(fc):
 def appendFeatures(features,targetFc):
     """Writes each update feature to target feature class, then appends attachments to the target
     feature class attachment table with the GUID from the newly added update feature"""
-    import uuid
     desc = arcpy.Describe(targetFc)
     #List of fields from feature class to append
     afieldNames = fieldNameList(features)
