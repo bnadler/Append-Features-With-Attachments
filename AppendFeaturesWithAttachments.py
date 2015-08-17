@@ -35,11 +35,19 @@ def buildWhereClauseFromList(OriginTable, PrimaryKeyField, valueList):
 
 def fieldNameList(fc):
     """Convert FieldList object to list of fields"""
-    fields = arcpy.ListFields(fc)
-    fieldNames = []
-    for f in fields:
-        fieldNames.append(f.name)
+    fieldNames = [fld.name for fld in arcpy.ListFields(fc)]
     return fieldNames
+
+def validate_shape_field(origin, target):
+    #Ensure proper formatting for Shapefield name
+    if 'Shape' in origin and 'Shape' in target:
+        pass
+    elif 'SHAPE' in origin and 'SHAPE' in target:
+        pass
+    elif 'SHAPE' in origin and 'Shape' in target:
+        origin[origin.index('SHAPE')] = 'Shape'
+    elif 'Shape' in origin and 'SHAPE' in target:
+        origin[origin.index('Shape')] = 'SHAPE'
 
 def appendFeatures(features,targetFc):
     """Writes each update feature to target feature class, then appends attachments to the target
@@ -49,6 +57,7 @@ def appendFeatures(features,targetFc):
     afieldNames = fieldNameList(features)
     #List of fields from target feature class
     tfieldNames = fieldNameList(targetFc)
+    validate_shape_field(afieldNames, tfieldNames)    
     #Find Guid field index for later use
     oldGuidField = afieldNames.index('GlobalID') if 'GlobalID' in afieldNames else None
     tempField = None
@@ -81,7 +90,7 @@ def appendFeatures(features,targetFc):
                         print "Old GUID = {} New GUID = {}".format(arow[oldGuidField], scur[0])
                         guids[arow[oldGuidField]] = scur[0]
 
-                #Update  empty row with all the information from update feature
+                #Update empty row with all the information from update feature
                 with arcpy.da.UpdateCursor(targetFc,'*', expression)as ucur:
                     urow = ucur.next()
                     for f in tfields:
