@@ -55,8 +55,11 @@ def appendFeatures(features,targetFc):
     desc = arcpy.Describe(targetFc)
     #List of fields from feature class to append
     afieldNames = fieldNameList(features)
+    #Cursor needs SHAPE@ not just shape field
+    afieldNames.append('SHAPE@')
     #List of fields from target feature class
     tfieldNames = fieldNameList(targetFc)
+    tfieldNames.append('SHAPE@')
     validate_shape_field(afieldNames, tfieldNames)    
     #Find Guid field index for later use
     oldGuidField = afieldNames.index('GlobalID') if 'GlobalID' in afieldNames else None
@@ -96,6 +99,8 @@ def appendFeatures(features,targetFc):
                     for f in tfields:
                         fname = f.name
                         if fname != 'OBJECTID' and fname != 'GlobalID' and fname in afieldNames:
+                            if fname.upper() == 'SHAPE':
+                                urow[tfieldNames.index('SHAPE@')] = arow[afieldNames.index('SHAPE@')]
                             urow[tfieldNames.index(fname)] = arow[afieldNames.index(fname)]
                     ucur.updateRow(urow)
 
