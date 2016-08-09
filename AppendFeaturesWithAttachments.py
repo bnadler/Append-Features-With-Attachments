@@ -72,7 +72,7 @@ def appendFeatures(features,targetFc):
             tempField = f.name
             break
     editor= arcpy.da.Editor(desc.path)
-    with arcpy.da.SearchCursor(features,'*') as fscur:
+    with arcpy.da.SearchCursor(features,afieldNames) as fscur:
 
         editor.startEditing(False, False)
 
@@ -94,7 +94,7 @@ def appendFeatures(features,targetFc):
                         guids[arow[oldGuidField]] = scur[0]
 
                 #Update empty row with all the information from update feature
-                with arcpy.da.UpdateCursor(targetFc,'*', expression)as ucur:
+                with arcpy.da.UpdateCursor(targetFc,tfieldNames, expression)as ucur:
                     urow = ucur.next()
                     for f in tfields:
                         fname = f.name
